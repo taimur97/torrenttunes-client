@@ -1,9 +1,6 @@
 package com.torrenttunes.client.webservice;
 
 import static com.torrenttunes.client.db.Tables.LIBRARY;
-import static com.torrenttunes.client.db.Tables.PLAYLIST;
-import static com.torrenttunes.client.db.Tables.PLAYLIST_TRACK_VIEW;
-import static com.torrenttunes.client.db.Tables.QUEUE_VIEW;
 import static com.torrenttunes.client.db.Tables.SETTINGS;
 import static spark.Spark.get;
 import static spark.Spark.post;
@@ -11,34 +8,23 @@ import static spark.Spark.post;
 
 
 
-
-
-
-
-import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.RandomAccessFile;
-import java.net.URLDecoder;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.NoSuchElementException;
+
+
+
 import java.util.Set;
 
-import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
 
 
 
 
-
-
-
-
-import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.map.JsonMappingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,11 +32,8 @@ import org.slf4j.LoggerFactory;
 
 
 
-
-
-
-
 import com.frostwire.jlibtorrent.TorrentHandle;
+import com.frostwire.jlibtorrent.TorrentStatus;
 import com.frostwire.jlibtorrent.swig.default_storage;
 import com.torrenttunes.client.LibtorrentEngine;
 import com.torrenttunes.client.ScanDirectory;
@@ -90,214 +73,9 @@ public class Platform {
 				Tools.dbClose();
 			}
 
-
-
-
 		});
 
-		get("/get_play_queue", (req, res) -> {
-
-			try {
-				Tools.allowAllHeaders(req, res);
-
-				Tools.dbInit();
-				String json = QUEUE_VIEW.findAll().toJson(false);
-
-
-				return json;
-
-			} catch (Exception e) {
-				res.status(666);
-				e.printStackTrace();
-				return e.getMessage();
-			} finally {
-				Tools.dbClose();
-			}
-
-
-
-
-		});
-
-		post("/save_play_queue", (req, res) -> {
-
-			try {
-				Tools.allowAllHeaders(req, res);
-
-				JsonNode on = Tools.jsonToNode(req.body());
-
-				Tools.dbInit();
-				Actions.clearAndSavePlayQueue(on);
-
-
-				return "Play queue saved";
-
-			} catch (Exception e) {
-				res.status(666);
-				e.printStackTrace();
-				return e.getMessage();
-			} finally {
-				Tools.dbClose();
-			}
-
-
-
-		});
-
-		get("/get_playlists", (req, res) -> {
-
-			try {
-				Tools.allowAllHeaders(req, res);
-
-				Tools.dbInit();
-				String json = PLAYLIST.findAll().toJson(false);
-
-
-				return json;
-
-			} catch (Exception e) {
-				res.status(666);
-				e.printStackTrace();
-				return e.getMessage();
-			} finally {
-				Tools.dbClose();
-			}
-
-
-
-
-		});
-
-		get("/get_playlist/:playlistId", (req, res) -> {
-
-			try {
-				Tools.allowAllHeaders(req, res);
-
-				String playlistId = req.params(":playlistId");
-				Tools.dbInit();
-				String json = PLAYLIST_TRACK_VIEW.find("playlist_id = ?", playlistId).toJson(false);
-
-
-				return json;
-
-			} catch (Exception e) {
-				res.status(666);
-				e.printStackTrace();
-				return e.getMessage();
-			} finally {
-				Tools.dbClose();
-			}
-
-
-
-
-		});
-
-		post("/create_playlist", (req, res) -> {
-			try {
-				Tools.allowAllHeaders(req, res);
-				Tools.logRequestInfo(req);
-
-				Map<String, String> vars = Tools.createMapFromAjaxPost(req.body());
-
-				String name = vars.get("name");
-
-				Tools.dbInit();
-				String playlistId = Actions.createPlaylist(name);
-
-				return playlistId;
-
-			} catch (Exception e) {
-				res.status(666);
-				e.printStackTrace();
-				return e.getMessage();
-			} finally {
-				Tools.dbClose();
-			}
-
-		});
-
-		post("/add_to_playlist/:playlistId/:infoHash", (req, res) -> {
-
-			try {
-				Tools.allowAllHeaders(req, res);
-
-				Tools.dbInit();
-
-				String playlistId = req.params(":playlistId");
-				String infoHash = req.params(":infoHash");
-
-				String message = Actions.addToPlaylist(playlistId, infoHash);
-
-
-				return message;
-
-			} catch (Exception e) {
-				res.status(666);
-				e.printStackTrace();
-				return e.getMessage();
-			} finally {
-				Tools.dbClose();
-			}
-
-
-
-		});
-
-		post("/remove_from_playlist/:playlistId/:infoHash", (req, res) -> {
-
-			try {
-				Tools.allowAllHeaders(req, res);
-
-				Tools.dbInit();
-
-				String playlistId = req.params(":playlistId");
-				String infoHash = req.params(":infoHash");
-
-				String message = Actions.removeFromPlaylist(playlistId, infoHash);
-
-
-				return message;
-
-			} catch (Exception e) {
-				res.status(666);
-				e.printStackTrace();
-				return e.getMessage();
-			} finally {
-				Tools.dbClose();
-			}
-
-
-
-		});
-
-		post("/delete_playlist/:playlistId", (req, res) -> {
-
-			try {
-				Tools.allowAllHeaders(req, res);
-
-				Tools.dbInit();
-
-				String playlistId = req.params(":playlistId");
-
-				String message = Actions.deletePlaylist(playlistId);
-
-
-				return message;
-
-			} catch (Exception e) {
-				res.status(666);
-				e.printStackTrace();
-				return e.getMessage();
-			} finally {
-				Tools.dbClose();
-			}
-
-
-
-		});
-
-
+		
 		post("/upload_music_directory", (req, res) -> {
 
 			try {
@@ -305,6 +83,8 @@ public class Platform {
 				Map<String, String> vars = Tools.createMapFromAjaxPost(req.body());
 
 				String uploadPath = vars.get("upload_path");
+				
+				log.info(uploadPath);
 
 				ScanDirectory.start(new File(uploadPath));
 
@@ -321,6 +101,35 @@ public class Platform {
 
 
 		});
+		
+		// Example : 
+		// curl --data "/home/derp/Music/A Music Dir" http://localhost:4568/share_directory
+		post("/share_directory", (req, res) -> {
+
+			try {
+				Tools.allowAllHeaders(req, res);
+				
+				log.info(req.body());
+
+				String path = req.body().trim();
+
+				Set<ScanInfo> scanInfos = ScanDirectory.start(new File(path));
+
+				String scanInfoReport = ScanDirectory.scanInfosReport(scanInfos) + "\n";
+
+				return scanInfoReport;
+
+			} catch (Exception e) {
+				res.status(666);
+				e.printStackTrace();
+				return e.getMessage();
+			} 
+
+
+
+		});
+		
+		
 
 		get("/get_upload_info", (req, res) -> {
 
@@ -410,16 +219,45 @@ public class Platform {
 				
 				String infoHash = req.params(":infoHash");
 				
-				log.info("progress info hash: " + infoHash);
+//				log.info("progress info hash: " + infoHash);
+				
 				TorrentHandle th = LibtorrentEngine.INSTANCE.getInfoHashToTorrentMap().get(infoHash);
+				log.info("Progress torrent: " + th.getName());
 				
-				float progress = th.getStatus().getProgress();
 				
-//				String formattedProgress = Tools.NUMBER_FORMAT.format(progress);
-				
-//				return formattedProgress;
+				Double progress = th.getStatus().getProgressPpm() / 1E6;
+//				float progress = th.getStatus().getProgress();
 				
 				return progress;
+				
+
+			} catch (Exception e) {
+				res.status(666);
+//				e.printStackTrace();
+				return e.getMessage();
+			} 
+			
+		});
+		
+		get("/get_torrent_status/:infoHash", (req, res) -> {
+			try {
+
+				Tools.allowAllHeaders(req, res);
+				
+				String infoHash = req.params(":infoHash");
+				
+				log.info("progress info hash: " + infoHash);
+				TorrentHandle th = LibtorrentEngine.INSTANCE.getInfoHashToTorrentMap().get(infoHash);
+//				th.forceRecheck();
+//				th.saveResumeData();
+				if (th == null) {
+					return "its null derp";
+				}
+				TorrentStatus status = th.getStatus();
+				
+				Tools.printTorrentStatus(status);
+				
+				return status.toString();
 				
 
 			} catch (Exception e) {
@@ -430,10 +268,10 @@ public class Platform {
 			
 		});
 		
-		get("/clear_cache", (req, res) -> {
+		post("/clear_cache", (req, res) -> {
 			try {
 
-				Tools.allowAllHeaders(req, res);
+				Tools.allowOnlyLocalHeaders(req, res);
 
 				Tools.dbInit();
 				
@@ -451,6 +289,78 @@ public class Platform {
 			}
 			
 		});
+		
+		post("/clear_database", (req, res) -> {
+			try {
+
+				Tools.allowOnlyLocalHeaders(req, res);
+
+				Tools.dbInit();
+				
+				String json = Actions.clearDatabase();
+				
+				return json;
+				
+
+			} catch (Exception e) {
+				res.status(666);
+				e.printStackTrace();
+				return e.getMessage();
+			} finally {
+				Tools.dbClose();
+			}
+			
+		});
+		
+
+		
+		get("/remove_artist/:artistMBID", (req, res) -> {
+			try {
+
+				Tools.allowOnlyLocalHeaders(req, res);
+				
+				String artistMBID = req.params(":artistMBID");
+				Tools.dbInit();
+				
+				String json = Actions.removeArtist(artistMBID);
+				
+				return json;
+				
+
+			} catch (Exception e) {
+				res.status(666);
+				e.printStackTrace();
+				return e.getMessage();
+			} finally {
+				Tools.dbClose();
+			}
+			
+		});
+		
+		get("/remove_song/:songMBID", (req, res) -> {
+			try {
+
+				Tools.allowOnlyLocalHeaders(req, res);
+				
+				String songMBID = req.params(":songMBID");
+				Tools.dbInit();
+				
+				String json = Actions.removeSong(songMBID);
+				
+				return json;
+				
+
+			} catch (Exception e) {
+				res.status(666);
+				e.printStackTrace();
+				return e.getMessage();
+			} finally {
+				Tools.dbClose();
+			}
+			
+		});
+
+		
 
 		post("/power_off", (req, res) -> {
 			try {
@@ -459,7 +369,7 @@ public class Platform {
 				log.info("Powering off...");
 				
 				default_storage.disk_write_access_log(false);
-				LibtorrentEngine.INSTANCE.getSession().pause(); // should save all the resumeData
+//				LibtorrentEngine.INSTANCE.getSession().pause(); // should save all the resumeData
 				LibtorrentEngine.INSTANCE.getSession().abort();
 
 				
@@ -475,6 +385,8 @@ public class Platform {
 		
 		post("/uninstall", (req, res) -> {
 			try {
+				
+				Tools.allowOnlyLocalHeaders(req, res);
 
 				log.info("Uninstalling torrenttunes");
 				Tools.uninstall();

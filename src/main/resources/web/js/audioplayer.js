@@ -198,7 +198,31 @@
 
       }
 
+      function ancestor(nodeName, element, checkCurrent) {
+
+        var result;
+
+        if (!element || !nodeName) {
+          return element;
+        }
+
+        nodeName = nodeName.toUpperCase();
+
+        // return if current node matches.
+        if (checkCurrent && element && element.nodeName === nodeName) {
+          return element;
+        }
+
+        while (element && element.nodeName !== nodeName && element.parentNode) {
+          element = element.parentNode;
+        }
+
+        return (element && element.nodeName === nodeName ? element : null);
+
+      }
+
       return {
+        ancestor: ancestor,
         get: get,
         getAll: getAll
       };
@@ -632,12 +656,15 @@
           itemBottom,
           containerHeight,
           scrollTop,
-          itemPadding;
+          itemPadding,
+          liElement;
 
         // remove last selected, if any
         resetLastSelected();
 
         if (item) {
+
+          liElement = utils.dom.ancestor('li', item);
 
           utils.css.add(item, css.selected);
 
@@ -655,10 +682,11 @@
             dom.playlist.scrollTop = item.offsetTop - itemPadding;
           }
 
+
         }
 
         // update selected offset, too.
-        offset = findOffsetFromItem(item);
+        offset = findOffsetFromItem(liElement);
 
         data.selectedIndex = offset;
 
@@ -1086,10 +1114,10 @@
               utils.css.remove(dom.o, 'buffering');
             }
 
-            if (this.duration > 5000) {
-              this.pause();
-              this.resume();
-            }
+            // if (this.duration > 5000) {
+            //   this.pause();
+            //   this.resume();
+            // }
 
           },
         });
@@ -1447,6 +1475,28 @@
           utils.css.toggle(target.parentNode, css.active);
           playlistController.data.loopMode = !playlistController.data.loopMode;
         }
+
+      },
+
+      trash: function(e) {
+        console.log("trash pushed");
+        var target = (e ? e.target || e.srcElement : utils.dom.get(dom.o, '.trash'));
+
+        if (target) {
+          $('#playlist_div').empty();
+
+          $('.sm2-bar-ui').addClass('hide');
+
+          playQueue = [];
+          savePlayQueueToLocalStorage();
+
+          playlistController.refresh();
+
+          player.actions.next();
+          player.actions.stop();
+        }
+
+
 
       },
 

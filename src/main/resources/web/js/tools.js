@@ -50,6 +50,8 @@ function simpleAjax(url, noToast, name) {
   return $.ajax({
     type: "GET",
     url: url,
+    cache: true,
+    // ifModified:true,
     xhrFields: {
       withCredentials: true
     },
@@ -86,6 +88,7 @@ function fillSimpleText(url, divId) {
   return $.ajax({
     type: "GET",
     url: url,
+    cache: true,
     xhrFields: {
       withCredentials: true
     },
@@ -109,6 +112,7 @@ function fillStatusText(url, divId) {
     $.ajax({
       type: "GET",
       url: url,
+      cache: true,
       xhrFields: {
         withCredentials: true
       },
@@ -294,7 +298,7 @@ function simplePost(shortUrl, postData, reload, successFunctions, noToast, spark
   reload = (typeof reload === "undefined") ? false : reload;
 
   noToast = (typeof noToast === "undefined") ? false : noToast;
-  
+
   sparkService = (typeof sparkService === "undefined" || sparkService == null) ? localSparkService : sparkService;
 
   btnId = (typeof btnId === "undefined") ? false : btnId;
@@ -424,6 +428,7 @@ function fillTableFromMustache(url, templateHtml, divId, tableId) {
   var url = localSparkService + url // the script where you handle the form input.
   $.ajax({
     type: "GET",
+    cache: true,
     url: url,
     xhrFields: {
       withCredentials: true
@@ -497,6 +502,7 @@ function fillMustacheFromJson(url, templateHtml, divId) {
   return $.ajax({
     type: "GET",
     url: url,
+    cache: true,
     xhrFields: {
       withCredentials: true
     },
@@ -535,6 +541,7 @@ function fillMustacheFromJson(url, templateHtml, divId) {
 }
 
 function fillMustacheWithJson(data, templateHtml, divId) {
+
 
   $.extend(data, standardDateFormatObj);
   $.extend(data, otherDateFormatObj);
@@ -589,31 +596,34 @@ function getCookies() {
   return cookies;
 }
 
-function getCookie(name) {
-  var cookie = getCookies()[name];
-  if (cookie != null) {
-    return cookie.replace(/"/g, "");
-  } else {
-    return cookie;
+function getCookie(c_name) {
+  if (document.cookie.length > 0) {
+    c_start = document.cookie.indexOf(c_name + "=");
+    if (c_start != -1) {
+      c_start = c_start + c_name.length + 1;
+      c_end = document.cookie.indexOf(";", c_start);
+      if (c_end == -1) {
+        c_end = document.cookie.length;
+      }
+      return unescape(document.cookie.substring(c_start, c_end));
+    }
   }
-
+  return "";
 }
 
-function delete_cookie(name) {
+function deleteCookie(name) {
   document.cookie = name + '=; path=/;expires=Thu, 01 Jan 1970 00:00:01 GMT;';
 }
 
-var createCookie = function(name, value, days) {
-    var expires;
-    if (days) {
-        var date = new Date();
-        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-        expires = "; expires=" + date.toGMTString();
-    }
-    else {
-        expires = "";
-    }
-    document.cookie = name + "=" + value + expires + "; path=/";
+function createCookie(name, value, days) {
+  if (days) {
+    var date = new Date();
+    date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000); // ) removed
+    var expires = "; expires=" + date.toGMTString(); // + added
+  } else
+    var expires = "";
+
+  document.cookie = name + "=" + value + expires + ";path=/"; // + and " added
 }
 
 function countdown(divId, expireTimeInMS) {
@@ -646,7 +656,13 @@ function getUrlPathArray() {
 }
 
 function getLastUrlPath() {
-  return getUrlPathArray().slice(-1)[0];
+  var path;
+  if (window.location.toString().startsWith('file:')) {
+    path = getUrlPathArray().slice(-1)[0];
+  } else {
+    path = torrentTunesSparkService;
+  }
+  return path;
 
 }
 
@@ -678,19 +694,25 @@ function insertParam(key, value) {
     console.log(newURL);
     // console.log(getLastUrlPath());
 
-    window.history.pushState({path:newURL}, 'TorrentTunes', getLastUrlPath() + '?' + newURL);
+    window.history.pushState({
+      path: newURL
+    }, 'TorrentTunes', getLastUrlPath() + '?' + newURL);
   }
 
 }
 
 function replaceParams(key, value) {
   var newURL = '?' + key + '=' + value;
-  window.history.pushState({path:newURL}, 'TorrentTunes', getLastUrlPath() + newURL);
+  window.history.pushState({
+    path: newURL
+  }, 'TorrentTunes', getLastUrlPath() + newURL);
 }
 
 function clearParams() {
   var url = getLastUrlPath();
-  // window.history.pushState({path:url}, 'TorrentTunes', url);
+  window.history.pushState({
+    path: url
+  }, 'TorrentTunes', url);
   // window.history.go(-window.history.length+1);
   // window.history.go(window.history[0]);
 }
@@ -1152,4 +1174,24 @@ Array.prototype.min = function() {
 
 function isMobile() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|BB|PlayBook|IEMobile|Windows Phone|Kindle|Silk|Opera Mini/i.test(navigator.userAgent);
+}
+
+function findIndexInArray(array, key, value) {
+  for (var i = 0; i < array.length; i++) {
+    if (array[i][key] === value) {
+      return i;
+    }
+  }
+  return null;
+}
+
+function hideKeyboard(element) {
+    element.attr('readonly', 'readonly'); // Force keyboard to hide on input field.
+    element.attr('disabled', 'true'); // Force keyboard to hide on textarea field.
+    setTimeout(function() {
+        element.blur();  //actually close the keyboard
+        // Remove readonly attribute after keyboard is hidden.
+        element.removeAttr('readonly');
+        element.removeAttr('disabled');
+    }, 100);
 }

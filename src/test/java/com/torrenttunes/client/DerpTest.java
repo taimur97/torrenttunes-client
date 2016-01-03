@@ -10,6 +10,8 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import junit.framework.TestCase;
 
@@ -25,7 +27,9 @@ import com.frostwire.jlibtorrent.TorrentHandle;
 import com.musicbrainz.mp3.tagger.Tools.Song;
 import com.torrenttunes.client.ScanDirectory.ScanInfo;
 import com.torrenttunes.client.db.Tables.Library;
+import com.torrenttunes.client.tools.WriteMultilingualHTMLFiles;
 import com.torrenttunes.client.tools.DataSources;
+import com.torrenttunes.client.tools.Strings;
 import com.torrenttunes.client.tools.Tools;
 
 public class DerpTest extends TestCase {
@@ -138,9 +142,31 @@ public class DerpTest extends TestCase {
 		}
 	}
 	
-	public static void testDerp6() {
-
+	public static void testDerp6() throws JsonGenerationException, JsonMappingException, IOException {
+//		Song song = Song.fetchSong(new File(DataSources.SAMPLE_SONG));
+//		
+//		String songJson = Tools.MAPPER.writeValueAsString(song);
+//		
+//		// Add the mac_address
+//		ObjectNode on = Tools.MAPPER.valueToTree(Tools.jsonToNode(songJson));
+//		on.put("uploader_ip_hash", DataSources.IP_HASH);
+//		
+//		String songUploadJson = Tools.nodeToJson(on);
+//		log.info("song upload json:\n" + songUploadJson);
+		
+//		System.out.println(Tools.GSON2.toJson(Strings.EN.map));
+		
+//		Map<String, String> map = Strings.EN.map;
+//		
+//		for (Entry<String, String> e : map.entrySet()) {
+//			System.out.println(e.getKey() + " : " + e.getValue());
+//		}
+		
+//		WriteMultilingualHTMLFiles.write();
+		
+		
 		
 	}
 
 }
+

@@ -1,21 +1,17 @@
 package com.torrenttunes.client.tools;
 
-import java.awt.Desktop;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
-import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -30,7 +26,9 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
@@ -38,6 +36,9 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.http.HttpEntity;
@@ -67,23 +68,21 @@ import spark.Request;
 import spark.Response;
 
 import com.frostwire.jlibtorrent.Entry;
+import com.frostwire.jlibtorrent.TorrentStatus;
 import com.frostwire.jlibtorrent.swig.create_torrent;
 import com.frostwire.jlibtorrent.swig.error_code;
 import com.frostwire.jlibtorrent.swig.file_storage;
 import com.frostwire.jlibtorrent.swig.libtorrent;
+import com.google.common.base.Charsets;
 import com.google.common.hash.HashCode;
+import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 import com.google.common.io.Files;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.musicbrainz.mp3.tagger.Tools.Song;
 
 public class Tools {
 
 	static final Logger log = LoggerFactory.getLogger(Tools.class);
-
-	public static final Gson GSON = new Gson();
-	public static final Gson GSON2 = new GsonBuilder().setPrettyPrinting().create();
 
 	public static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -91,6 +90,8 @@ public class Tools {
 
 	public static final String USER_AGENT = "torrenttunes-client/1.0.0 (https://github.com/tchoulihan/torrenttunes-client)";
 
+	public static final SimpleDateFormat RESPONSE_HEADER_DATE_FORMAT = 
+			new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz");
 
 	public static void allowOnlyLocalHeaders(Request req, Response res) {
 
@@ -120,6 +121,12 @@ public class Tools {
 		res.header("Access-Control-Allow-Origin", origin);
 
 
+	}
+
+
+	public static void set15MinuteCache(Request req, Response res) {
+		res.header("Cache-Control", "public,max-age=300,s-maxage=900");
+		res.header("Last-Modified", RESPONSE_HEADER_DATE_FORMAT.format(DataSources.APP_START_DATE));
 	}
 
 
@@ -164,7 +171,7 @@ public class Tools {
 			}
 		}
 
-		log.debug(GSON2.toJson(postMap));
+
 
 		return postMap;
 
@@ -203,9 +210,6 @@ public class Tools {
 
 	public static void copyResourcesToHomeDir(Boolean copyAnyway) {
 
-
-		String zipFile = null;
-
 		String foundVersion = "";
 		try {
 			foundVersion = readFile(DataSources.INSTALLED_VERSION_FILE()).trim();
@@ -218,58 +222,58 @@ public class Tools {
 
 			log.info("Copying resources to  ~/." + DataSources.APP_NAME + " dirs");
 
-			try {
-				if (new File(DataSources.SHADED_JAR_FILE).exists()) {
-					java.nio.file.Files.copy(Paths.get(DataSources.SHADED_JAR_FILE), Paths.get(DataSources.ZIP_FILE()), 
-							StandardCopyOption.REPLACE_EXISTING);
-					zipFile = DataSources.SHADED_JAR_FILE;
+			String zipFile = copyJarFileToHome();
 
-				} else if (new File(DataSources.SHADED_JAR_FILE_2()).exists()) {
-					java.nio.file.Files.copy(Paths.get(DataSources.SHADED_JAR_FILE_2()), Paths.get(DataSources.ZIP_FILE()),
-							StandardCopyOption.REPLACE_EXISTING);
-					zipFile = DataSources.SHADED_JAR_FILE_2();
-				} else {
-					log.info("you need to build the project first");
-				}
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+			deleteTemporaryJarFile();
 
-
-			// unzip and rename it to a jar, if it doesn't already exist
-			// TODO gotta figure this one out
-			File jarFile = new File(DataSources.JAR_FILE());
-			try {
-				File currentJar = new File(Tools.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath());
-				if (!jarFile.equals(currentJar)) {
-					jarFile.delete();
-				}
-
-
-			} catch (URISyntaxException e) {
-				e.printStackTrace();
-			}
-
-			//			if (!new File(DataSources.JAR_FILE()).exists()) {
+			// Unzip it and rename it
 			Tools.unzip(new File(zipFile), new File(DataSources.SOURCE_CODE_HOME()));
 			new File(DataSources.ZIP_FILE()).renameTo(new File(DataSources.JAR_FILE()));
-			//			}
 
 			// Update the version number
-			PrintWriter writer;
-			try {
-				writer = new PrintWriter(DataSources.INSTALLED_VERSION_FILE(), "UTF-8");
-				writer.println(DataSources.VERSION);
-				writer.close();
-
-			} catch (FileNotFoundException | UnsupportedEncodingException e) {
-				e.printStackTrace();
-			}
+			Tools.writeFile(DataSources.VERSION, DataSources.INSTALLED_VERSION_FILE());
 
 			Tools.installShortcuts();
-			//		new Tools().copyJarResourcesRecursively("src", configHome);
+
+			WriteMultilingualHTMLFiles.write();
+
 		} else {
 			log.info("The source directory already exists");
+		}
+	}
+
+	private static String copyJarFileToHome() {
+		String zipFile = null;
+		try {
+			if (new File(DataSources.SHADED_JAR_FILE).exists()) {
+				java.nio.file.Files.copy(Paths.get(DataSources.SHADED_JAR_FILE), Paths.get(DataSources.ZIP_FILE()), 
+						StandardCopyOption.REPLACE_EXISTING);
+				zipFile = DataSources.SHADED_JAR_FILE;
+
+			} else if (new File(DataSources.SHADED_JAR_FILE_2()).exists()) {
+				java.nio.file.Files.copy(Paths.get(DataSources.SHADED_JAR_FILE_2()), Paths.get(DataSources.ZIP_FILE()),
+						StandardCopyOption.REPLACE_EXISTING);
+				zipFile = DataSources.SHADED_JAR_FILE_2();
+			} else {
+				log.info("you need to build the project first");
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return zipFile;
+	}
+
+	private static void deleteTemporaryJarFile() {
+		File jarFile = new File(DataSources.JAR_FILE());
+		try {
+			File currentJar = new File(Tools.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath());
+			if (!jarFile.equals(currentJar)) {
+				jarFile.delete();
+			}
+
+
+		} catch (URISyntaxException e) {
+			e.printStackTrace();
 		}
 	}
 
@@ -364,8 +368,13 @@ public class Tools {
 	public static String constructTrackTorrentFilename(File file, Song song) {
 
 
-		String songName = String.format("%1.80s", song.getRecording());
-		String fileName = song.getArtist() + " - " + song.getRelease() + " - " + songName
+		
+		String artistReleaseSongName = song.getArtist() + " - " + 
+				song.getRelease() + " - " + 
+				song.getRecording();
+		String artistReleaseSongLimitedName = String.format("%1.80s", artistReleaseSongName);
+		
+		String fileName = artistReleaseSongLimitedName
 				+ " - tt[mbid-" + song.getRecordingMBID().toLowerCase()
 				+ "_sha2-" + sha2FileChecksum(file) + "]";
 
@@ -395,7 +404,7 @@ public class Tools {
 			httppost.setEntity(entity);
 
 			HttpResponse response = httpclient.execute(httppost);
-			log.info(response.toString());
+			log.debug(response.toString());
 
 		} catch (IOException e) {
 			throw new NoSuchElementException("Filename too long.");
@@ -439,8 +448,8 @@ public class Tools {
 			throw new NoSuchElementException("Couldn't save the torrent info");
 		}
 
-		message = "Rqlite write status : " + message;
-		log.info(message);
+		message = "upload status : " + message;
+		log.debug(message);
 		return message;
 	}
 
@@ -460,6 +469,39 @@ public class Tools {
 			log.error("file : " + path + " doesn't exist.");
 		}
 		return s;
+	}
+
+	public static String readFile(File file) {
+		return readFile(file.getAbsolutePath());
+	}
+
+	public static void writeFile(String text, String path) {
+		try {
+			java.nio.file.Files.write(Paths.get(path), text.getBytes());
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public static void writeFile(String text, File filePath) {
+		writeFile(text, filePath.getAbsolutePath());
+	}
+
+	public static HttpServletResponse writeFileToResponse(String path, Response res) {
+
+		byte[] encoded;
+		try {
+			encoded = java.nio.file.Files.readAllBytes(Paths.get(path));
+
+			ServletOutputStream os = res.raw().getOutputStream();
+			os.write(encoded);
+			os.close();
+			return res.raw();
+
+		} catch (IOException e) {
+			e.printStackTrace();
+			throw new NoSuchElementException("Couldn't write result");
+		}
 	}
 
 	public static void uninstall() {
@@ -619,7 +661,7 @@ public class Tools {
 
 			String torrentTunesServiceLine = "var torrentTunesSparkService ='" + 
 					DataSources.TORRENTTUNES_URL + "';";
-			
+
 			String externalServiceLine = "var externalSparkService ='" + 
 					DataSources.EXTERNAL_URL + "';";
 
@@ -638,39 +680,11 @@ public class Tools {
 
 	}
 
-	public static void pollAndOpenStartPage() {
-		// poll some of the url's every .5 seconds, and load the page when they come back with a result
-		int i = 500;
-		int cTime = 0;
-		while (cTime < 30000) {
-			try {
-				try {
-					String webServiceStartedURL = DataSources.WEB_SERVICE_STARTED_URL();
 
-					HttpURLConnection connection = null;
-					URL url = new URL(webServiceStartedURL);
-					connection = (HttpURLConnection) url.openConnection();
-					connection.setConnectTimeout(5000);//specify the timeout and catch the IOexception
-					connection.connect();
-					Thread.sleep(2*i);
-					Tools.openWebpage(DataSources.MAIN_PAGE_URL());
-					cTime = 30000;
-				} catch (IOException e) {
-					log.info("Could not connect to local webservice, retrying in 500ms up to 30 seconds");
-					cTime += i;
-
-					Thread.sleep(i);
-
-				}
-			} catch (InterruptedException e1) {
-				e1.printStackTrace();
-			}
-		}
-	}
-
-	public static void openWebpage(String urlString) {
+	public static void openFileWebpage(String urlString) {
 		try {
-			URL url = new URL(urlString);
+			String fileUrlString = "file://" + urlString;
+			URL url = new URL(fileUrlString);
 			openWebpage(url.toURI());
 		} catch (URISyntaxException | MalformedURLException e) {
 			e.printStackTrace();
@@ -678,18 +692,19 @@ public class Tools {
 	}
 
 	public static void openWebpage(URI uri) {
+		log.info("Opening web page: " + uri);
 		DesktopApi.browse(uri);
 	}
 
 	public static Long folderSize(File directory) {
 		long length = 0;
-		for (File file : directory.listFiles()) {
-			if (file.isFile())
-				length += file.length();
-			else
-				length += folderSize(file);
+		log.info("folder size directory: " + directory);
+		Collection<File> files = FileUtils.listFiles(directory, new String[]{".mp3"}, true);
+		for (File file : files) {
+			length += file.length();
 		}
 		return length;
+
 	}
 
 	public static void installShortcuts() {
@@ -804,6 +819,7 @@ public class Tools {
 
 	}
 
+
 	public static void installLinuxShortcuts() {
 		log.info("Installing linux shortcuts...");
 		try {
@@ -909,6 +925,55 @@ public class Tools {
 
 		return torrentFile;
 	}
+
+
+	public static void printTorrentStatus(TorrentStatus ts) {
+
+		StringBuilder s = new StringBuilder();
+		s.append("Torrent status for name: " + ts.getName() + "\n");
+		s.append("info_hash: " + ts.getInfoHash() + "\n");
+		s.append("state: " + ts.getState().toString() + "\n");
+		s.append("error: " + ts.errorCode() + "\n");
+		s.append("progress: " + ts.getProgress() + "\n");
+		s.append("Queue position: " + ts.getQueuePosition() + "\n");
+
+		//		ts.getHandle().forceRecheck();
+		//		ts.getHandle().queuePositionTop();
+
+		log.info(s.toString());
+	}
+
+	public static void setContentTypeFromFileName(String pageName, Response res) {
+
+		if (pageName.endsWith(".css")) {
+			res.type("text/css");
+		} else if (pageName.endsWith(".js")) {
+			res.type("application/javascript");
+		} else if (pageName.endsWith(".png")) {
+			res.type("image/png");
+			res.header("Content-Disposition", "filename=MyFileName.png");
+			res.header("Accept-Ranges", "bytes");			
+		} else if (pageName.endsWith(".svg")) {
+			res.type("image/svg+xml");
+		}
+	}
+
+
+	public static String getIPHash() {
+
+		// IP address is mixed with the users home directory, 
+		// so that it can't be decrypted by the server.
+
+		String text = DataSources.EXTERNAL_IP + System.getProperty("user.home");
+
+		HashFunction hf = Hashing.md5();
+		HashCode hc = hf.hashString(text, Charsets.UTF_8);
+
+		String ipHash = hc.toString();
+
+		return ipHash;
+	}
+
 
 }
 

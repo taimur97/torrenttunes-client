@@ -118,8 +118,10 @@ function setupSearch() {
     }
 
 
-  }).bind('typeahead:selected', function(e, data) {
+  }).bind('typeahead:selected', function(e, data, name) {
+    console.log(e);
     console.log(data);
+    console.log(name);
 
     setSearchType(data);
 
@@ -127,6 +129,10 @@ function setupSearch() {
     // $('#search_id').val(searchId);
 
     $(this).submit();
+  }).bind('typeahead:render', function(e) {
+
+    $('#search_form').parent().find('.tt-selectable:first').addClass('tt-cursor');
+
   });
 
   // $('[name=search_input]').focus();
@@ -137,8 +143,7 @@ function setupSearch() {
   $("#search_form").submit(function(event) {
     var formData = $("#search_form").serializeArray();
 
-
-
+    hideKeyboard($('[name=search_input]'));
 
     // var classList = document.getElementsByName('creators_list').className.split(/\s+/);
     // console.log(classList);
@@ -180,24 +185,20 @@ function setupSearch() {
 
 function setSearchType(data) {
   // add a class for the type
-  var mbidTypes = ['song_mbid', 'artist_mbid', 'album_mbid'];
+  var searchTypes = ['search_song', 'search_artist', 'search_album'];
   var searchTypeIndex = 0;
   for (i = 0; i < 3; i++) {
-    searchTypeIndex = $.inArray(mbidTypes[i], Object.keys(data));
+    searchTypeIndex = $.inArray(searchTypes[i], Object.keys(data));
     console.log(searchTypeIndex);
     if (searchTypeIndex != -1) {
       break;
     }
   }
 
-  var searchType = Object.keys(data)[searchTypeIndex];
-  var searchMbid = data[searchType];
 
-  if (searchType == 'song_mbid') {
-    searchMbid = data['album_mbid'];
-  }
-  console.log(searchType);
-  console.log(searchMbid);
+  var searchType = Object.keys(data)[searchTypeIndex];
+
+
 
   // remove the 3 classes first
   $("#search_form").removeClass('song-search-type');
@@ -205,13 +206,22 @@ function setSearchType(data) {
   $("#search_form").removeClass('artist-search-type');
 
 
-  if (searchType == 'song_mbid') {
+  var searchMbid;
+  if (searchType == 'search_song') {
+    searchMbid = data['release_group_mbid'];
     $("#search_form").addClass('song-search-type');
-  } else if (searchType == 'album_mbid') {
+  } else if (searchType == 'search_album') {
+    searchMbid = data['mbid'];
     $("#search_form").addClass('album-search-type');
-  } else if (searchType == 'artist_mbid') {
+  } else if (searchType == 'search_artist') {
+    searchMbid = data['artist_mbid'];
     $("#search_form").addClass('artist-search-type');
   }
+
+  console.log(searchType);
+  console.log(searchMbid);
+
+
 
   $('#search_id').val(searchMbid);
 }
@@ -247,8 +257,11 @@ function showAlbumPage(releaseMBID) {
 }
 
 
-function showPlaylist(id) {
-  playlistPageTabID = id;
+function showPlaylist(name) {
+  playlistPageTabID = name;
+  setupPlaylistPageTab();
+
+  deleteExtraFieldsFromPlaylists();
   // $('a[href="#homeTab"]').tab('show');
   $('a[href="#playlistPageTab"]').tab('show');
   console.log('showing ' + playlistPageTabID);
@@ -256,7 +269,7 @@ function showPlaylist(id) {
 
 
 function setupTrackSelect() {
-  $('.track-select').click(function(e) {
+  $('.track-select').unbind('click').click(function(e) {
     console.log('track selected');
     // var full = this.id.split('_');
     var name = $(this).attr('name');
@@ -271,7 +284,6 @@ function setupTrackSelect() {
     console.log(option);
     console.log(infoHash);
 
-    // radioMode.running = false;
     downloadOrFetchTrackObj(infoHash, option);
 
 
@@ -280,28 +292,103 @@ function setupTrackSelect() {
 
   // console.log(library[0]);
   // console.log(library[id]);
+}
+
+function setupTrackRemoveFromQueue() {
+
+  $('.sm2-trash').unbind('click').click(function(e) {
+
+    var mbid = $(this).closest('li').find('.artist_playing_clickable').attr('mbid');
+
+    console.log(mbid);
+
+    var queueIndex = findIndexInArray(playQueue, 'mbid', mbid);
+
+    console.log('mbid = ' + mbid);
+    console.log('queueIndex = ' + queueIndex);
+
+    playQueue.splice(queueIndex, 1);
+
+    savePlayQueueToLocalStorage();
+
+    console.log('removing track from queue');
+    var li = $(this).closest('li');
+    // console.log(li);
+    li.remove();
+
+    player.playlistController.refresh();
 
 
-
+  });
 }
 
 function setupAddToPlaylist() {
-  $('.add_to_playlist').click(function(e) {
+  $('.add_to_playlist').unbind('click').click(function(e) {
     console.log('adding to playlist');
     // var full = this.id.split('_');
     var name = $(this).attr('name');
-    var full = name.split('_');
+    var full = name.split('][');
 
 
 
     console.log(full);
     var option = full[0];
-    var playlistId = full[1];
+    var playlistName = full[1];
 
-    var infoHash = $(this).closest('td').find('.track-select').attr('name').split('_')[1];
-    simplePost('add_to_playlist/' + playlistId + "/" + infoHash, null, null, function() {
-      console.log('Track ' + infoHash + ' added to playlist');
-    });
+    var closest = $(this).closest('td').find('.track-select');
+
+    // The vars from those fields
+    var infoHash = closest.attr('info_hash');
+    var song_mbid = closest.attr('song_mbid');
+    var file_path = closest.attr('file_path');
+    var title = closest.attr('title');
+    var artist_mbid = closest.attr('artist_mbid');
+    var artist = closest.attr('artist');
+    var duration_ms = closest.attr('duration_ms');
+    var release_group_mbid = closest.attr('release_group_mbid');
+    var album = closest.attr('album');
+    var seeders = closest.attr('seeders');
+
+
+
+    var playlistIndex = findIndexInArray(playlists, 'name', playlistName);
+    console.log('playlist index = ' + playlistIndex);
+
+    var playlist = playlists[playlistIndex];
+    var tracks = playlist['tracks'];
+
+    // Make sure that infohash doesn't already exist
+    var trackIndex = findIndexInArray(tracks, 'info_hash', infoHash);
+
+    if (trackIndex == null) {
+      var playlistTrackObj = {
+        "album": album,
+        "artist": artist,
+        "artist_mbid": artist_mbid,
+        "duration_ms": duration_ms,
+        "info_hash": infoHash,
+        "release_group_mbid": release_group_mbid,
+        "seeders": seeders,
+        "song_mbid": song_mbid,
+        "title": title
+      };
+
+
+      deleteExtraFieldsFromPlaylists();
+
+      tracks.push(playlistTrackObj);
+
+      savePlaylistsToLocalStorage();
+
+      toastr.success(playlistTrackObj['title'] + ' added to playlist ' + playlist['name']);
+    } else {
+      toastr.error('Track already exists in playlist');
+    }
+
+    // @deprecated
+    // simplePost('add_to_playlist/' + playlistId + "/" + infoHash, null, null, function() {
+    //   console.log('Track ' + infoHash + ' added to playlist');
+    // });
 
   });
 
@@ -310,10 +397,31 @@ function setupAddToPlaylist() {
   // console.log(library[id]);
 }
 
+function saveReorderedPlaylist(playlistIndex, oldIndex, newIndex) {
+  var playlist = playlists[playlistIndex];
+  var tracks = playlist['tracks'];
 
+  console.log('old = ' + oldIndex + ' new = ' + newIndex);
+
+  // move the tracks
+  tracks.splice(newIndex, 0, tracks.splice(oldIndex, 1)[0]);
+
+  savePlaylistsToLocalStorage();
+}
+
+function saveReorderedPlayQueue(oldIndex, newIndex) {
+
+  console.log('old = ' + oldIndex + ' new = ' + newIndex);
+
+  // move the tracks
+  playQueue.splice(newIndex, 0, playQueue.splice(oldIndex, 1)[0]);
+
+
+  savePlayQueueToLocalStorage();
+}
 
 function setupTrackDelete() {
-  $('.track-delete').click(function(e) {
+  $('.track-delete').unbind('click').click(function(e) {
     console.log('track selected for delete');
     // var full = this.id.split('_');
     var name = $(this).attr('name');
@@ -331,7 +439,7 @@ function setupTrackDelete() {
     simplePost('delete_song/' + infoHash, null, null, function() {
 
       $('[name=' + name).closest("tr").remove();
-      $('wrapper').tooltip('destroy');
+      $('.tooltip').tooltip('destroy');
     });
 
   });
@@ -339,7 +447,7 @@ function setupTrackDelete() {
 }
 
 function setupPlaylistTrackDelete() {
-  $('.playlist-track-delete').click(function(e) {
+  $('.playlist-track-delete').unbind('click').click(function(e) {
     console.log('Deleting track');
     // var full = this.id.split('_');
     var name = $(this).attr('name');
@@ -349,17 +457,37 @@ function setupPlaylistTrackDelete() {
 
     console.log(full);
     var option = full[0];
-    var playlistId = full[1];
+    var playlistName = full[1];
 
     console.log(option);
-    console.log(playlistId);
+    console.log(playlistName);
 
     var infoHash = $(this).closest('td').find('.track-select').attr('name').split('_')[1];
-    simplePost('remove_from_playlist/' + playlistPageTabID + "/" + playlistId, null, null, function() {
-      console.log('Track ' + infoHash + ' removed from playlist');
-      $('wrapper').tooltip('destroy');
-      setupPlaylistPageTab();
-    });
+
+    var playlistIndex = findIndexInArray(playlists, 'name', playlistName);
+    console.log('playlist index = ' + playlistIndex);
+
+    var playlist = playlists[playlistIndex];
+    var tracks = playlist['tracks'];
+
+    var trackIndex = findIndexInArray(tracks, 'info_hash', infoHash);
+
+    tracks.splice(trackIndex, 1);
+
+    $('.tooltip').tooltip('destroy');
+    $('[data-info_hash="' + infoHash + '"').remove();
+
+
+    savePlaylistsToLocalStorage();
+
+    toastr.success('Track Removed');
+
+    // @deprecated
+    // simplePost('remove_from_playlist/' + playlistPageTabID + "/" + playlistId, null, null, function() {
+    //   console.log('Track ' + infoHash + ' removed from playlist');
+    //   $('wrapper').tooltip('destroy');
+    //   setupPlaylistPageTab();
+    // });
 
   });
 
